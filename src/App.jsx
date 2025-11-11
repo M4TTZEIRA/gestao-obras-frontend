@@ -120,8 +120,10 @@ function formatDateTime(isoString) {
 function formatDate(isoString) {
     if (!isoString) return 'N/A';
     try {
+        // Adiciona 'T00:00:00Z' para garantir que a data seja interpretada como UTC
         const date = new Date(isoString + 'T00:00:00Z'); 
         if (isNaN(date.getTime())) { return 'Data inválida'; }
+        // timeZone: 'UTC' garante que a data não mude para o dia anterior
         return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
     } catch (e) {
         console.error("Erro ao formatar data:", isoString, e);
