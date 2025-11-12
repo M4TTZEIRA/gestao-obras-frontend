@@ -1640,44 +1640,83 @@ function GlobalFinanceiroPage({ user, onLogout, onOpenProfile }) {
 }
 
 // --- PÁGINA GLOBAL DE INVENTÁRIO (ATUALIZADA) ---
-// --- PÁGINA GLOBAL DE INVENTÁRIO (ATUALIZADA) ---
-function GlobalInventarioPage({ user, onLogout, onOpenProfile }) { // <-- 1. ACEITA A PROP
-  const [itens, setItens] = useState([]);
+function GlobalInventarioPage({ user, onLogout, onOpenProfile }) {
+  const [stockItems, setStockItems] = useState([]);
+  const [obraItems, setObraItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0); // Para forçar o recarregamento
 
-  useEffect(() => {
-    const fetchGlobalInventory = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        // 1. Chama a nova rota do backend
-        const response = await api.get('/reports/global-inventory/');
-        setItens(response.data);
-      } catch (err) {
-        console.error("Erro ao buscar inventário global:", err);
-        if (err.response && err.response.data && err.response.data.error) {
-            setError(err.response.data.error);
+  // --- Estados para o Modal ---
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [obraParaAdicionar, setObraParaAdicionar] = useState(null); // ID da obra para o modal
+  const [stockObraId, setStockObraId] = useState(null); // Guarda o ID do Estoque Central
+
+  const canManage = user?.role !== 'Prestador';
+
+  // Função para buscar os dados
+  const fetchGlobalInventory = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // 1. Busca os itens de inventário
+      const response = await api.get('/reports/global-inventory/');
+      setStockItems(response.data.stock_items || []);
+      setObraItems(response.data.obra_items || []);
+      
+      // 2. Encontra o ID da Obra "Estoque Central" (para o botão 'Adicionar')
+      // (Poderíamos buscar em /api/obras/ mas isso é mais eficiente)
+      if (response.data.stock_items && response.data.stock_items.length > 0) {
+        setStockObraId(response.data.stock_items[0].obra_id);
+      } else {
+        // Se o estoque está vazio, precisamos encontrar o ID da obra de estoque
+        const obrasResponse = await api.get('/obras/');
+        const stockObra = obrasResponse.data.find(obra => obra.is_stock_default === true);
+        if (stockObra) {
+          setStockObraId(stockObra.id);
         } else {
-            setError("Não foi possível carregar o inventário consolidado.");
+          console.error("Não foi possível encontrar a Obra 'Estoque Central'");
+          setError("Erro de configuração: A obra 'Estoque Central' não foi encontrada.");
         }
-      } finally {
-        setIsLoading(false);
       }
-    };
+      
+    } catch (err) {
+      console.error("Erro ao buscar inventário global:", err);
+      if (err.response && err.response.data && err.response.data.error) {
+          setError(err.response.data.error);
+      } else {
+          setError("Não foi possível carregar o inventário consolidado.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  // Busca os dados ao carregar a página ou ao forçar refresh
+  useEffect(() => {
     fetchGlobalInventory();
-  }, []); // Roda apenas uma vez
+  }, [refreshKey]); 
 
-  // Helper para ícones (copiado da InventarioTab)
-  const getItemIcon = (tipo) => {
-      switch (tipo?.toLowerCase()) {
-          case 'ferramenta': return <Wrench className="w-4 h-4 mr-2 text-orange-600" />; 
-          case 'material': return <Box className="w-4 h-4 mr-2 text-blue-600" />;
-          case 'epi': return <ShieldCheck className="w-4 h-4 mr-2 text-green-600" />;
-          default: return <Package className="w-4 h-4 mr-2 text-gray-500" />;
+  // --- Handlers para o Modal ---
+  const handleOpenAddStockModal = () => {
+      if (stockObraId) {
+          setObraParaAdicionar(stockObraId);
+          setIsAddModalOpen(true);
+      } else {
+          setError("Erro: Não foi possível identificar o Estoque Central para adicionar itens.");
       }
   };
+  
+  const handleModalClose = () => {
+      setIsAddModalOpen(false);
+      setObraParaAdicionar(null);
+  };
+  
+  const handleActionSuccess = () => {
+      handleModalClose();
+      setRefreshKey(prev => prev + 1); // Força o recarregamento dos dados
+  };
+  // -----------------------------
 
   return (
     <>
@@ -1685,10 +1724,9 @@ function GlobalInventarioPage({ user, onLogout, onOpenProfile }) { // <-- 1. ACE
         user={user} 
         onLogoutClick={onLogout} 
         pageTitle="Inventário Global" 
-        onOpenProfile={onOpenProfile} // <-- 2. PASSA A PROP PARA O HEADER
+        onOpenProfile={onOpenProfile}
       />
       <div className="p-6 md:p-10">
-        <h2 className="text-xl font-semibold text-gray-700 mb-6">Inventário Global Consolidado</h2>
         
         {isLoading && (
           <div className="text-center text-gray-500 py-10">A carregar inventário...</div>
@@ -1700,60 +1738,129 @@ function GlobalInventarioPage({ user, onLogout, onOpenProfile }) { // <-- 1. ACE
             </div>
         )}
 
-        {/* 2. Renderiza a tabela de inventário */}
+        {/* --- SEÇÃO 1: ESTOQUE CENTRAL --- */}
         {!isLoading && !error && (
-            <div className="overflow-x-auto border border-gray-200 rounded-lg bg-white shadow-md">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Obra</th>
-                            <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Nome do Item</th>
-                            <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Tipo</th>
-                            <th className="px-6 py-3 text-xs font-medium tracking-wider text-center text-gray-500 uppercase">Qtd.</th>
-                            <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Status</th>
-                            <th className="px-6 py-3 text-xs font-medium tracking-wider text-right text-gray-500 uppercase">Custo Unit.</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {itens.length > 0 ? (
-                            itens.map((item) => (
-                                <tr key={item.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 text-sm font-semibold text-gray-800 whitespace-nowrap">{item.obra_nome}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm font-medium text-gray-900">{item.nome}</div>
-                                        <div className="text-xs text-gray-500">{item.descricao || ''}</div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                         <span className="inline-flex items-center text-sm text-gray-700">
-                                             {getItemIcon(item.tipo)} {item.tipo || 'N/D'}
-                                         </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap text-center">{item.quantidade}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`inline-flex px-2 text-xs font-semibold leading-5 rounded-full ${
-                                            item.status_movimentacao === 'Em Estoque' ? 'bg-blue-100 text-blue-800' :
-                                            item.status_movimentacao === 'Em Uso' ? 'bg-yellow-100 text-yellow-800' :
-                                            item.status_movimentacao === 'Descartado' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
-                                        }`}>
-                                            {item.status_movimentacao}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap text-right">{formatCurrency(item.custo_unitario)}</td>
-                                </tr>
-                            ))
-                        ) : (
-                            <tr>
-                                <td colSpan="6" className="py-10 text-center text-gray-500">
-                                    Nenhum item de inventário encontrado em nenhuma obra.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+          <div className="mb-10">
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+                <h2 className="text-xl font-semibold text-gray-700">Estoque Central da Empresa</h2>
+                {canManage && (
+                  <button
+                      onClick={handleOpenAddStockModal}
+                      disabled={!stockObraId} // Desabilita se o ID do estoque não foi encontrado
+                      className="flex items-center w-full sm:w-auto justify-center px-4 py-2 font-semibold text-white bg-purple-600 rounded-md hover:bg-purple-700 disabled:bg-gray-400" 
+                  >
+                      <Plus className="w-5 h-5 mr-2" />
+                      Adicionar ao Estoque Central
+                  </button>
+                )}
             </div>
+             <InventarioTable items={stockItems} isLoading={isLoading} canManage={canManage} />
+          </div>
         )}
+        
+        {/* --- SEÇÃO 2: INVENTÁRIO NAS OBRAS --- */}
+         {!isLoading && !error && (
+          <div>
+            <h2 className="text-xl font-semibold text-gray-700 mb-4">Inventário Consolidado nas Obras</h2>
+             <InventarioTable items={obraItems} isLoading={isLoading} canManage={canManage} showObraName={true} />
+          </div>
+        )}
+
       </div>
+      
+      {/* --- Modal de Adicionar Item (Reutilizado) --- */}
+      {isAddModalOpen && obraParaAdicionar && (
+          <NovoItemInventarioModal
+              obraId={obraParaAdicionar}
+              onClose={handleModalClose}
+              onItemAdicionado={handleActionSuccess}
+          />
+      )}
     </>
+  );
+}
+
+// --- NOVO: Componente de Tabela de Inventário Reutilizável ---
+// (Adicione esta nova função junto com seus outros componentes no App.jsx,
+//  por exemplo, depois do ChecklistCard)
+function InventarioTable({ items, isLoading, canManage, showObraName = false }) {
+    
+  // Helper para ícones (copiado da InventarioTab)
+  const getItemIcon = (tipo) => {
+      switch (tipo?.toLowerCase()) {
+          case 'ferramenta': return <Wrench className="w-4 h-4 mr-2 text-orange-600" />; 
+          case 'material': return <Box className="w-4 h-4 mr-2 text-blue-600" />;
+          case 'epi': return <ShieldCheck className="w-4 h-4 mr-2 text-green-600" />;
+          default: return <Package className="w-4 h-4 mr-2 text-gray-500" />;
+      }
+  };
+    
+  // Define as colunas com base em showObraName
+  const columns = [
+      showObraName && { key: 'obra_nome', label: 'Obra' },
+      { key: 'nome', label: 'Nome do Item' },
+      { key: 'tipo', label: 'Tipo' },
+      { key: 'quantidade', label: 'Qtd.', align: 'center' },
+      { key: 'status', label: 'Status' },
+      { key: 'custo', label: 'Custo Unit.', align: 'right' }
+  ].filter(Boolean); // Filtra valores falsos (como o showObraName)
+
+  return (
+       <div className="overflow-x-auto border border-gray-200 rounded-lg bg-white shadow-md">
+            <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                    <tr>
+                        {columns.map(col => (
+                           <th key={col.key} className={`px-6 py-3 text-xs font-medium tracking-wider text-gray-500 uppercase ${
+                               col.align === 'right' ? 'text-right' : 
+                               col.align === 'center' ? 'text-center' : 'text-left'
+                           }`}>{col.label}</th> 
+                        ))}
+                    </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                    {isLoading ? (
+                        <tr>
+                            <td colSpan={columns.length} className="py-10 text-center text-gray-500">A carregar...</td>
+                        </tr>
+                    ) : items.length > 0 ? (
+                        items.map((item) => (
+                            <tr key={item.id} className="hover:bg-gray-50">
+                                {showObraName && (
+                                    <td className="px-6 py-4 text-sm font-semibold text-gray-800 whitespace-nowrap">{item.obra_nome}</td>
+                                )}
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-gray-900">{item.nome}</div>
+                                    <div className="text-xs text-gray-500">{item.descricao || ''}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                     <span className="inline-flex items-center text-sm text-gray-700">
+                                         {getItemIcon(item.tipo)} {item.tipo || 'N/D'}
+                                     </span>
+                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap text-center">{item.quantidade}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className={`inline-flex px-2 text-xs font-semibold leading-5 rounded-full ${
+                                        item.status_movimentacao === 'Em Estoque' ? 'bg-blue-100 text-blue-800' :
+                                        item.status_movimentacao === 'Em Uso' ? 'bg-yellow-100 text-yellow-800' :
+                                        item.status_movimentacao === 'Descartado' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                                    }`}>
+                                        {item.status_movimentacao}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap text-right">{formatCurrency(item.custo_unitario)}</td>
+                            </tr>
+                        ))
+                    ) : (
+                        <tr>
+                            <td colSpan={columns.length} className="py-10 text-center text-gray-500">
+                                Nenhum item encontrado.
+                            </td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        </div>
   );
 }
 
