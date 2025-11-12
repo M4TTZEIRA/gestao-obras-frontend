@@ -1314,12 +1314,16 @@ function RemoverUsuarioModal({ user, onClose, onActionSuccess }) {
 
 // --- PÁGINA GLOBAL DE FINANCEIRO (ATUALIZADA COM GRÁFICO DE LINHA) ---
 // --- PÁGINA GLOBAL DE FINANCEIRO (ATUALIZADA) ---
-function GlobalFinanceiroPage({ user, onLogout, onOpenProfile }) { // <-- 1. ACEITA A PROP
+// --- PÁGINA GLOBAL DE FINANCEIRO (ATUALIZADA COM FILTROS) ---
+function GlobalFinanceiroPage({ user, onLogout, onOpenProfile }) {
   const [chartData, setChartData] = useState(null);
   const [kpis, setKpis] = useState(null); 
-  
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // --- NOVO ESTADO PARA O FILTRO ---
+  const [periodo, setPeriodo] = useState('mensal'); // 'mensal' ou 'semanal'
+  // --------------------------------
 
   useEffect(() => {
     const fetchData = async () => {
@@ -1327,9 +1331,11 @@ function GlobalFinanceiroPage({ user, onLogout, onOpenProfile }) { // <-- 1. ACE
       setError(null);
       
       try {
+        // ATUALIZADO: Busca os dados do gráfico E os KPIs em paralelo
+        // E envia o parâmetro 'periodo' para a rota do fluxo de caixa
         const [cashflowResponse, kpiResponse] = await Promise.all([
-            api.get('/reports/cashflow/'),
-            api.get('/reports/kpis/') 
+            api.get('/reports/cashflow/', { params: { periodo } }), // <-- ENVIA O PERÍODO
+            api.get('/reports/kpis/')
         ]);
 
         // Processa dados do Gráfico
@@ -1367,7 +1373,6 @@ function GlobalFinanceiroPage({ user, onLogout, onOpenProfile }) { // <-- 1. ACE
             const receitas = parseFloat(kpiResponse.data.total_receitas || 0);
             const custos = parseFloat(kpiResponse.data.total_custos || 0);
             kpiResponse.data.saldo_total = receitas - custos;
-            
             setKpis(kpiResponse.data);
         }
 
@@ -1384,9 +1389,9 @@ function GlobalFinanceiroPage({ user, onLogout, onOpenProfile }) { // <-- 1. ACE
     };
 
     fetchData();
-  }, []);
+  }, [periodo]); // <-- ATUALIZADO: Roda de novo se o 'periodo' mudar
 
-  // Opções do gráfico
+  // Opções do gráfico (Sem alterações)
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false, 
@@ -1394,7 +1399,7 @@ function GlobalFinanceiroPage({ user, onLogout, onOpenProfile }) { // <-- 1. ACE
       legend: { position: 'top' },
       title: {
         display: true,
-        text: 'Fluxo de Caixa Mensal (Entradas vs. Saídas)',
+        text: `Fluxo de Caixa ${periodo === 'mensal' ? 'Mensal' : 'Semanal'}`,
         font: { size: 16 }
       },
       tooltip: {
@@ -1420,6 +1425,23 @@ function GlobalFinanceiroPage({ user, onLogout, onOpenProfile }) { // <-- 1. ACE
       }
     }
   };
+  
+  // Componente de botão de filtro
+  const FilterButton = ({ text, value }) => {
+      const isActive = periodo === value;
+      return (
+          <button
+              onClick={() => setPeriodo(value)}
+              className={`px-4 py-2 text-sm font-medium rounded-md ${
+                  isActive 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border'
+              }`}
+          >
+              {text}
+          </button>
+      );
+  };
 
   return (
     <>
@@ -1427,13 +1449,13 @@ function GlobalFinanceiroPage({ user, onLogout, onOpenProfile }) { // <-- 1. ACE
         user={user} 
         onLogoutClick={onLogout} 
         pageTitle="Financeiro Global" 
-        onOpenProfile={onOpenProfile} // <-- 2. PASSA A PROP PARA O HEADER
+        onOpenProfile={onOpenProfile}
       />
       <div className="p-6 md:p-10">
         <h2 className="text-xl font-semibold text-gray-700 mb-6">Visão Geral Financeira</h2>
         
-        {/* --- SEÇÃO DE KPIs --- */}
-        {isLoading && (
+        {/* --- SEÇÃO DE KPIs (Sem alterações) --- */}
+        {isLoading && !kpis && ( // Mostra o loading inicial dos KPIs
           <div className="text-center text-gray-500 py-10">A carregar indicadores...</div>
         )}
         
@@ -1468,12 +1490,19 @@ function GlobalFinanceiroPage({ user, onLogout, onOpenProfile }) { // <-- 1. ACE
             />
           </div>
         )}
-        {/* --- FIM DA SEÇÃO DE KPIs --- */}
-
         
-        {/* --- SEÇÃO DO GRÁFICO --- */}
+        {/* --- SEÇÃO DO GRÁFICO (ATUALIZADA) --- */}
         <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-700 mb-4">Fluxo de Caixa Consolidado</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-700">Fluxo de Caixa Consolidado</h3>
+            
+            {/* --- BOTÕES DE FILTRO (NOVOS) --- */}
+            <div className="flex space-x-2">
+                <FilterButton text="Semanal" value="semanal" />
+                <FilterButton text="Mensal" value="mensal" />
+            </div>
+            {/* ------------------------------- */}
+          </div>
           
           {isLoading && (
             <div className="flex justify-center items-center h-96 text-gray-500">A carregar dados do gráfico...</div>
@@ -1485,7 +1514,7 @@ function GlobalFinanceiroPage({ user, onLogout, onOpenProfile }) { // <-- 1. ACE
                     <Line options={chartOptions} data={chartData} />
                 ) : (
                     <div className="flex items-center justify-center h-full text-gray-500">
-                        Nenhum dado financeiro encontrado para exibir no gráfico.
+                        Nenhum dado financeiro encontrado para o período selecionado.
                     </div>
                 )}
             </div>
@@ -1496,6 +1525,7 @@ function GlobalFinanceiroPage({ user, onLogout, onOpenProfile }) { // <-- 1. ACE
       </div>
     </>
   );
+
 
 
   return (
@@ -1606,6 +1636,7 @@ function GlobalFinanceiroPage({ user, onLogout, onOpenProfile }) { // <-- 1. ACE
       </div>
     </>
   );
+
 }
 
 // --- PÁGINA GLOBAL DE INVENTÁRIO (ATUALIZADA) ---
