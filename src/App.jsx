@@ -291,7 +291,7 @@ export default function App() {
   );
 }
 
-// --- Componente de Renderização de View ---
+// --- Componente de Renderização de View (ATUALIZADO) ---
 // --- Componente de Renderização de View (ATUALIZADO) ---
 function RenderCurrentView({ view, user, onLogout, navigateToObra, obraId, onBackToDashboard, onOpenProfile }) {
   
@@ -302,7 +302,7 @@ function RenderCurrentView({ view, user, onLogout, navigateToObra, obraId, onBac
           user={user} 
           onLogout={onLogout} 
           onVerDetalhes={navigateToObra} 
-          onOpenProfile={onOpenProfile} // <-- PASSANDO A PROP
+          onOpenProfile={onOpenProfile} 
         />
       );
     case 'obra_detail':
@@ -312,27 +312,26 @@ function RenderCurrentView({ view, user, onLogout, navigateToObra, obraId, onBac
           onBackToDashboard={onBackToDashboard} 
           user={user} 
           onLogout={onLogout}
-          onOpenProfile={onOpenProfile} // <-- PASSANDO A PROP
+          onOpenProfile={onOpenProfile} 
         />
       );
     case 'inventario':
-      return <GlobalInventarioPage user={user} onLogout={onLogout} onOpenProfile={onOpenProfile} />; // <-- PASSANDO A PROP
+      return <GlobalInventarioPage user={user} onLogout={onLogout} onOpenProfile={onOpenProfile} />;
     case 'financeiro':
-      return <GlobalFinanceiroPage user={user} onLogout={onLogout} onOpenProfile={onOpenProfile} />; // <-- PASSANDO A PROP
+      return <GlobalFinanceiroPage user={user} onLogout={onLogout} onOpenProfile={onOpenProfile} />;
     case 'checklist':
-      return <GlobalChecklistPage user={user} onLogout={onLogout} onOpenProfile={onOpenProfile} />; // <-- PASSANDO A PROP
+      return <GlobalChecklistPage user={user} onLogout={onLogout} onOpenProfile={onOpenProfile} />;
     case 'documentos':
-      return <GlobalDocumentosPage user={user} onLogout={onLogout} onOpenProfile={onOpenProfile} />; // <-- PASSANDO A PROP
+      return <GlobalDocumentosPage user={user} onLogout={onLogout} onOpenProfile={onOpenProfile} />;
     case 'funcionarios':
-      return <GlobalFuncionariosPage user={user} onLogout={onLogout} onOpenProfile={onOpenProfile} />; // <-- PASSANDO A PROP
+      return <GlobalFuncionariosPage user={user} onLogout={onLogout} onOpenProfile={onOpenProfile} />;
     case 'relatorios':
-      return <GlobalRelatoriosPage user={user} onLogout={onLogout} onOpenProfile={onOpenProfile} />; // <-- PASSANDO A PROP
-    case 'marketplace': // <-- NOVO CASO
-      return <GlobalMarketplacePage user={user} />;
+      return <GlobalRelatoriosPage user={user} onLogout={onLogout} onOpenProfile={onOpenProfile} />;
+    case 'marketplace': 
+      // Adicionei as props onLogout e onOpenProfile aqui também para manter o padrão
+      return <GlobalMarketplacePage user={user} onLogout={onLogout} onOpenProfile={onOpenProfile} />;
     default:
       return <DashboardPage user={user} onLogout={onLogout} onVerDetalhes={navigateToObra} onOpenProfile={onOpenProfile} />;
-    case 'marketplace': // <-- NOVO CASO
-      return <GlobalMarketplacePage user={user} />;
   }
 }
 
@@ -1868,8 +1867,8 @@ function InventarioTable({ items, isLoading, canManage, showObraName = false }) 
   );
 }
 
-// --- PÁGINA GLOBAL MARKETPLACE ---
-function GlobalMarketplacePage({ user }) {
+// --- PÁGINA GLOBAL MARKETPLACE (ATUALIZADA COM HEADER) ---
+function GlobalMarketplacePage({ user, onLogout, onOpenProfile }) { // <-- Recebe as props do Header
   const [imoveis, setImoveis] = useState([]);
   const [viewMode, setViewMode] = useState('list'); // 'list' ou 'detail'
   const [selectedImovel, setSelectedImovel] = useState(null);
@@ -1899,72 +1898,95 @@ function GlobalMarketplacePage({ user }) {
   };
 
   if (viewMode === 'detail' && selectedImovel) {
-    return <ImovelDetailPage imovel={selectedImovel} onBack={handleBackToList} canManage={canManage} />;
+    // Passamos as props para a página de detalhes também, caso queira manter o Header lá
+    return (
+        <>
+            <Header 
+                user={user} 
+                onLogoutClick={onLogout} 
+                pageTitle="Detalhes do Imóvel" 
+                showBackButton={true}
+                onBackClick={handleBackToList}
+                onOpenProfile={onOpenProfile}
+            />
+            <ImovelDetailPage imovel={selectedImovel} onBack={handleBackToList} canManage={canManage} />
+        </>
+    );
   }
 
   return (
-    <div className="p-6 md:p-10">
-      <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-        <h2 className="text-2xl font-bold text-gray-800">Marketplace de Imóveis</h2>
-        {canManage && (
-          <button 
-            onClick={() => setIsModalOpen(true)} 
-            className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-          >
-            <Plus className="w-5 h-5 mr-2" /> Novo Imóvel
-          </button>
+    <>
+      {/* --- HEADER ADICIONADO AQUI --- */}
+      <Header 
+        user={user} 
+        onLogoutClick={onLogout} 
+        pageTitle="Marketplace" 
+        onOpenProfile={onOpenProfile} 
+      />
+      
+      <div className="p-6 md:p-10">
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+          <h2 className="text-xl font-semibold text-gray-700">Imóveis Disponíveis</h2>
+          {canManage && (
+            <button 
+              onClick={() => setIsModalOpen(true)} 
+              className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+            >
+              <Plus className="w-5 h-5 mr-2" /> Novo Imóvel
+            </button>
+          )}
+        </div>
+
+        {isLoading ? (
+            <div className="text-center text-gray-500 py-10">A carregar imóveis...</div>
+        ) : imoveis.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {imoveis.map(imovel => (
+                <div 
+                  key={imovel.id} 
+                  onClick={() => handleOpenDetail(imovel)} 
+                  className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group border border-gray-100"
+                >
+                  <div className="h-48 bg-gray-200 relative">
+                    {imovel.foto_capa_url ? (
+                      <img src={`${API_BASE_URL}${imovel.foto_capa_url}`} alt={imovel.titulo} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-gray-400 bg-gray-100">
+                          <Image className="w-12 h-12 opacity-50" />
+                      </div>
+                    )}
+                    <div className={`absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded shadow-sm ${
+                      imovel.status === 'Vendida' ? 'bg-red-500 text-white' : 
+                      imovel.status === 'Em negociação' ? 'bg-yellow-400 text-black' : 'bg-green-500 text-white'
+                    }`}>
+                      {imovel.status}
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-bold text-lg text-gray-800 mb-1 group-hover:text-blue-600 truncate">{imovel.titulo}</h3>
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-2 h-10">{imovel.endereco_completo}</p>
+                    <div className="flex justify-between items-center text-sm text-gray-500 border-t pt-3">
+                      <span className="font-medium text-gray-700">{imovel.metragem || 'N/D'}</span>
+                      <span>{imovel.proprietario || 'N/D'}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+        ) : (
+            <div className="text-center text-gray-500 py-10 bg-white rounded-lg border border-dashed border-gray-300">
+                Nenhum imóvel cadastrado no momento.
+            </div>
+        )}
+
+        {isModalOpen && (
+          <NovoImovelModal 
+              onClose={() => setIsModalOpen(false)} 
+              onSuccess={() => { setIsModalOpen(false); setRefresh(r => r + 1); }} 
+          />
         )}
       </div>
-
-      {isLoading ? (
-          <div className="text-center text-gray-500 py-10">A carregar imóveis...</div>
-      ) : imoveis.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {imoveis.map(imovel => (
-              <div 
-                key={imovel.id} 
-                onClick={() => handleOpenDetail(imovel)} 
-                className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group border border-gray-100"
-              >
-                <div className="h-48 bg-gray-200 relative">
-                  {imovel.foto_capa_url ? (
-                    <img src={`${API_BASE_URL}${imovel.foto_capa_url}`} alt={imovel.titulo} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-gray-400 bg-gray-100">
-                        <Image className="w-12 h-12 opacity-50" />
-                    </div>
-                  )}
-                  <div className={`absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded shadow-sm ${
-                    imovel.status === 'Vendida' ? 'bg-red-500 text-white' : 
-                    imovel.status === 'Em negociação' ? 'bg-yellow-400 text-black' : 'bg-green-500 text-white'
-                  }`}>
-                    {imovel.status}
-                  </div>
-                </div>
-                <div className="p-4">
-                  <h3 className="font-bold text-lg text-gray-800 mb-1 group-hover:text-blue-600 truncate">{imovel.titulo}</h3>
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2 h-10">{imovel.endereco_completo}</p>
-                  <div className="flex justify-between items-center text-sm text-gray-500 border-t pt-3">
-                    <span className="font-medium text-gray-700">{imovel.metragem || 'N/D'}</span>
-                    <span>{imovel.proprietario || 'N/D'}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-      ) : (
-          <div className="text-center text-gray-500 py-10 bg-white rounded-lg border border-dashed border-gray-300">
-              Nenhum imóvel cadastrado no momento.
-          </div>
-      )}
-
-      {isModalOpen && (
-        <NovoImovelModal 
-            onClose={() => setIsModalOpen(false)} 
-            onSuccess={() => { setIsModalOpen(false); setRefresh(r => r + 1); }} 
-        />
-      )}
-    </div>
+    </>
   );
 }
 
@@ -5638,8 +5660,8 @@ function TabButton({ text, isActive, onClick }) {
 
 // --- Sidebar (ATUALIZADO com PERMISSÕES) ---
 function Sidebar({ user, onLogoutClick, onNavigate, activeView }) { 
-  
-const navItems = [
+
+  const navItems = [
     { icon: <Home className="w-5 h-5" />, text: "Dashboard", id: 'dashboard' },
     { icon: <Package className="w-5 h-5" />, text: "Inventário", id: 'inventario' },
     { icon: <DollarSign className="w-5 h-5" />, text: "Financeiro", id: 'financeiro' },
@@ -5647,7 +5669,7 @@ const navItems = [
     { icon: <FileText className="w-5 h-5" />, text: "Documentos", id: "documentos" },
     { icon: <Users className="w-5 h-5" />, text: "Funcionários", id: "funcionarios" }, 
     { icon: <BarChart2 className="w-5 h-5" />, text: "Relatórios", id: "relatorios" },
-    { icon: <ShoppingBag className="w-5 h-5" />, text: "Marketplace", id: "marketplace" }, // <-- ADICIONADO
+    { icon: <ShoppingBag className="w-5 h-5" />, text: "Marketplace", id: "marketplace" }, // <-- ADICIONE ESTA LINHA
   ];
 
   // Regras de Permissão do Sidebar
