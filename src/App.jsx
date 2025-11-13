@@ -1868,11 +1868,17 @@ function InventarioTable({ items, isLoading, canManage, showObraName = false }) 
 }
 
 // --- PÁGINA GLOBAL MARKETPLACE (ATUALIZADA COM HEADER) ---
-function GlobalMarketplacePage({ user, onLogout, onOpenProfile }) { // <-- Recebe as props do Header
+// --- PÁGINA GLOBAL MARKETPLACE (ATUALIZADA COM EDIÇÃO) ---
+function GlobalMarketplacePage({ user }) {
   const [imoveis, setImoveis] = useState([]);
   const [viewMode, setViewMode] = useState('list'); // 'list' ou 'detail'
   const [selectedImovel, setSelectedImovel] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Estados dos Modais
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false); // <-- NOVO
+  const [editingImovel, setEditingImovel] = useState(null);      // <-- NOVO
+  
   const [refresh, setRefresh] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -1897,99 +1903,506 @@ function GlobalMarketplacePage({ user, onLogout, onOpenProfile }) { // <-- Receb
     setRefresh(prev => prev + 1);
   };
 
+  // --- HANDLERS DE EDIÇÃO ---
+  const handleEditClick = (imovel, e) => {
+      if (e) e.stopPropagation(); // Evita abrir os detalhes ao clicar no editar
+      setEditingImovel(imovel);
+      setIsEditModalOpen(true);
+  };
+
+  const handleEditSuccess = (imovelAtualizado) => {
+      setIsEditModalOpen(false);
+      setEditingImovel(null);
+      
+      // Se estivermos vendo os detalhes, atualizamos o imóvel selecionado
+      if (selectedImovel && selectedImovel.id === imovelAtualizado.id) {
+          // Mantém as fotos antigas no estado local para não piscar, 
+          // pois o PUT não retorna as fotos populadas da mesma forma que o GET detail
+          setSelectedImovel(prev => ({ ...prev, ...imovelAtualizado }));
+      }
+      setRefresh(prev => prev + 1);
+  };
+  // --------------------------
+
   if (viewMode === 'detail' && selectedImovel) {
-    // Passamos as props para a página de detalhes também, caso queira manter o Header lá
     return (
-        <>
-            <Header 
-                user={user} 
-                onLogoutClick={onLogout} 
-                pageTitle="Detalhes do Imóvel" 
-                showBackButton={true}
-                onBackClick={handleBackToList}
-                onOpenProfile={onOpenProfile}
-            />
-            <ImovelDetailPage imovel={selectedImovel} onBack={handleBackToList} canManage={canManage} />
-        </>
+        <ImovelDetailPage 
+            imovel={selectedImovel} 
+            onBack={handleBackToList} 
+            canManage={canManage} 
+            onEdit={(imovel) => handleEditClick(imovel)} // Passa a função para a página de detalhes
+        />
     );
   }
 
   return (
-    <>
-      {/* --- HEADER ADICIONADO AQUI --- */}
-      <Header 
-        user={user} 
-        onLogoutClick={onLogout} 
-        pageTitle="Marketplace" 
-        onOpenProfile={onOpenProfile} 
-      />
-      
-      <div className="p-6 md:p-10">
-        <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-          <h2 className="text-xl font-semibold text-gray-700">Imóveis Disponíveis</h2>
-          {canManage && (
-            <button 
-              onClick={() => setIsModalOpen(true)} 
-              className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-            >
-              <Plus className="w-5 h-5 mr-2" /> Novo Imóvel
-            </button>
-          )}
-        </div>
-
-        {isLoading ? (
-            <div className="text-center text-gray-500 py-10">A carregar imóveis...</div>
-        ) : imoveis.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {imoveis.map(imovel => (
-                <div 
-                  key={imovel.id} 
-                  onClick={() => handleOpenDetail(imovel)} 
-                  className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group border border-gray-100"
-                >
-                  <div className="h-48 bg-gray-200 relative">
-                    {imovel.foto_capa_url ? (
-                      <img src={`${API_BASE_URL}${imovel.foto_capa_url}`} alt={imovel.titulo} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-gray-400 bg-gray-100">
-                          <Image className="w-12 h-12 opacity-50" />
-                      </div>
-                    )}
-                    <div className={`absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded shadow-sm ${
-                      imovel.status === 'Vendida' ? 'bg-red-500 text-white' : 
-                      imovel.status === 'Em negociação' ? 'bg-yellow-400 text-black' : 'bg-green-500 text-white'
-                    }`}>
-                      {imovel.status}
-                    </div>
-                  </div>
-                  <div className="p-4">
-                    <h3 className="font-bold text-lg text-gray-800 mb-1 group-hover:text-blue-600 truncate">{imovel.titulo}</h3>
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2 h-10">{imovel.endereco_completo}</p>
-                    <div className="flex justify-between items-center text-sm text-gray-500 border-t pt-3">
-                      <span className="font-medium text-gray-700">{imovel.metragem || 'N/D'}</span>
-                      <span>{imovel.proprietario || 'N/D'}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-        ) : (
-            <div className="text-center text-gray-500 py-10 bg-white rounded-lg border border-dashed border-gray-300">
-                Nenhum imóvel cadastrado no momento.
-            </div>
-        )}
-
-        {isModalOpen && (
-          <NovoImovelModal 
-              onClose={() => setIsModalOpen(false)} 
-              onSuccess={() => { setIsModalOpen(false); setRefresh(r => r + 1); }} 
-          />
+    <div className="p-6 md:p-10">
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+        <h2 className="text-2xl font-bold text-gray-800">Marketplace de Imóveis</h2>
+        {canManage && (
+          <button 
+            onClick={() => setIsAddModalOpen(true)} 
+            className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+          >
+            <Plus className="w-5 h-5 mr-2" /> Novo Imóvel
+          </button>
         )}
       </div>
-    </>
+
+      {isLoading ? (
+          <div className="text-center text-gray-500 py-10">A carregar imóveis...</div>
+      ) : imoveis.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {imoveis.map(imovel => (
+              <div 
+                key={imovel.id} 
+                onClick={() => handleOpenDetail(imovel)} 
+                className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group border border-gray-100 relative"
+              >
+                {/* Botão de Editar no Card (Apenas Gestor/Admin) */}
+                {canManage && (
+                    <button 
+                        onClick={(e) => handleEditClick(imovel, e)}
+                        className="absolute top-2 left-2 z-10 p-2 bg-white/90 rounded-full text-blue-600 hover:text-blue-800 shadow-sm hover:bg-white transition-all"
+                        title="Editar Imóvel"
+                    >
+                        <Edit className="w-4 h-4" />
+                    </button>
+                )}
+
+                <div className="h-48 bg-gray-200 relative">
+                  {imovel.foto_capa_url ? (
+                    <img src={`${API_BASE_URL}${imovel.foto_capa_url}`} alt={imovel.titulo} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-400 bg-gray-100">
+                        <Image className="w-12 h-12 opacity-50" />
+                    </div>
+                  )}
+                  <div className={`absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded shadow-sm ${
+                    imovel.status === 'Vendida' ? 'bg-red-500 text-white' : 
+                    imovel.status === 'Em negociação' ? 'bg-yellow-400 text-black' : 'bg-green-500 text-white'
+                  }`}>
+                    {imovel.status}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <h3 className="font-bold text-lg text-gray-800 mb-1 group-hover:text-blue-600 truncate">{imovel.titulo}</h3>
+                  <p className="text-sm text-gray-600 mb-3 line-clamp-2 h-10">{imovel.endereco_completo}</p>
+                  <div className="flex justify-between items-center text-sm text-gray-500 border-t pt-3">
+                    <span className="font-medium text-gray-700">{imovel.metragem || 'N/D'}</span>
+                    <span>{imovel.proprietario || 'N/D'}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+      ) : (
+          <div className="text-center text-gray-500 py-10 bg-white rounded-lg border border-dashed border-gray-300">
+              Nenhum imóvel cadastrado no momento.
+          </div>
+      )}
+
+      {/* Modal de Adicionar */}
+      {isAddModalOpen && (
+        <NovoImovelModal 
+            onClose={() => setIsAddModalOpen(false)} 
+            onSuccess={() => { setIsAddModalOpen(false); setRefresh(r => r + 1); }} 
+        />
+      )}
+
+      {/* Modal de Editar (NOVO) */}
+      {isEditModalOpen && editingImovel && (
+        <EditarImovelModal 
+            imovel={editingImovel}
+            onClose={() => setIsEditModalOpen(false)} 
+            onSuccess={handleEditSuccess} 
+        />
+      )}
+    </div>
   );
 }
 
+// --- DETALHES DO IMÓVEL (ATUALIZADO COM BOTÃO EDITAR) ---
+function ImovelDetailPage({ imovel, onBack, canManage, onEdit }) {
+  const [galeria, setGaleria] = useState(imovel.fotos || []);
+  const [status, setStatus] = useState(imovel.status);
+  const [uploading, setUploading] = useState(false);
+  
+  // Atualiza a galeria se o imóvel mudar (ex: após edição)
+  useEffect(() => {
+      if (imovel.fotos) setGaleria(imovel.fotos);
+      setStatus(imovel.status);
+  }, [imovel]);
+
+  const handleUploadFoto = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('foto', file);
+    
+    try {
+      const res = await api.post(`/marketplace/${imovel.id}/fotos/`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setGaleria([...galeria, res.data]);
+    } catch (err) { 
+        alert("Erro ao enviar foto.");
+        console.error(err);
+    } finally {
+        setUploading(false);
+    }
+  };
+
+  const handleUpdateStatus = async (newStatus) => {
+      try {
+          await api.put(`/marketplace/${imovel.id}/`, { status: newStatus });
+          setStatus(newStatus);
+      } catch (e) { 
+          alert("Erro ao atualizar status"); 
+      }
+  };
+  
+  const handleRemoveImovel = async () => {
+      if(!window.confirm("Tem certeza que deseja remover este imóvel? Esta ação não pode ser desfeita.")) return;
+      try {
+          await api.delete(`/marketplace/${imovel.id}/`);
+          onBack();
+      } catch (e) {
+          alert("Erro ao remover imóvel.");
+      }
+  };
+
+  return (
+    <div className="p-6 md:p-10">
+      <div className="flex justify-between items-center mb-4">
+          <button onClick={onBack} className="flex items-center text-gray-600 hover:text-blue-600 font-medium">
+            <ArrowLeft className="w-5 h-5 mr-1" /> Voltar para a lista
+          </button>
+          {canManage && (
+              <div className="flex space-x-2">
+                  {/* Botão Editar na Página de Detalhes */}
+                  <button onClick={() => onEdit(imovel)} className="text-blue-600 hover:text-blue-800 text-sm flex items-center px-3 py-1 border border-blue-200 rounded-md hover:bg-blue-50">
+                      <Edit className="w-4 h-4 mr-1"/> Editar Dados
+                  </button>
+                  <button onClick={handleRemoveImovel} className="text-red-600 hover:text-red-800 text-sm flex items-center px-3 py-1 border border-red-200 rounded-md hover:bg-red-50">
+                      <Trash2 className="w-4 h-4 mr-1"/> Remover Imóvel
+                  </button>
+              </div>
+          )}
+      </div>
+
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
+        <div className="relative h-64 md:h-96 bg-gray-200 group">
+           {imovel.foto_capa_url ? (
+                <img src={`${API_BASE_URL}${imovel.foto_capa_url}`} className="w-full h-full object-cover" alt="Capa" />
+           ) : <div className="flex items-center justify-center h-full text-gray-400">Sem capa</div>}
+           
+           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 pt-24">
+               <h1 className="text-3xl md:text-4xl font-bold text-white mb-1">{imovel.titulo}</h1>
+               <p className="text-white/90 text-lg flex items-center"><Building className="w-5 h-5 mr-2"/> {imovel.endereco_completo}</p>
+           </div>
+        </div>
+
+        <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="md:col-span-2 space-y-8">
+                <div>
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-xl font-semibold text-gray-800">Galeria de Fotos</h3>
+                        {canManage && (
+                            <label className={`cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded-md text-sm font-medium inline-flex items-center transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                <Upload className="w-4 h-4 mr-2"/> 
+                                {uploading ? 'Enviando...' : 'Adicionar Foto'}
+                                <input type="file" className="hidden" onChange={handleUploadFoto} accept="image/*" disabled={uploading}/>
+                            </label>
+                        )}
+                    </div>
+                    
+                    {galeria.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {galeria.map(foto => (
+                                <div key={foto.id} className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden border cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(`${API_BASE_URL}${foto.url}`, '_blank')}>
+                                    <img src={`${API_BASE_URL}${foto.url}`} className="w-full h-full object-cover" alt="Galeria" />
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-gray-500">
+                            Nenhuma foto adicional na galeria.
+                        </div>
+                    )}
+                </div>
+
+                <div>
+                    <h3 className="text-xl font-semibold text-gray-800 mb-3">Observações</h3>
+                    <div className="bg-gray-50 p-5 rounded-lg border text-gray-700 whitespace-pre-wrap leading-relaxed">
+                        {imovel.observacoes || "Sem observações registradas para este imóvel."}
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-6">
+                <div className="bg-white p-5 rounded-lg border shadow-sm">
+                    <h4 className="font-bold text-gray-900 mb-4 text-lg border-b pb-2">Detalhes do Imóvel</h4>
+                    <div className="space-y-4 text-sm">
+                        <div>
+                            <span className="block text-gray-500 mb-1">Status Atual</span>
+                            {canManage ? (
+                                <select 
+                                    value={status} 
+                                    onChange={(e) => handleUpdateStatus(e.target.value)} 
+                                    className="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 py-2"
+                                >
+                                    <option>À venda</option>
+                                    <option>Em negociação</option>
+                                    <option>Vendida</option>
+                                </select>
+                            ) : (
+                                <span className={`inline-flex px-3 py-1 rounded-full text-sm font-semibold ${
+                                    status === 'Vendida' ? 'bg-red-100 text-red-800' : 
+                                    status === 'Em negociação' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                                }`}>{status}</span>
+                            )}
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <span className="block text-gray-500 mb-1">Metragem</span>
+                                <span className="font-semibold text-gray-900">{imovel.metragem || '-'}</span>
+                            </div>
+                            <div>
+                                <span className="block text-gray-500 mb-1">CEP</span>
+                                <span className="font-semibold text-gray-900">{imovel.cep || '-'}</span>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <span className="block text-gray-500 mb-1">Proprietário</span>
+                            <span className="font-semibold text-gray-900">{imovel.proprietario || '-'}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- MODAL NOVO IMÓVEL ---
+function NovoImovelModal({ onClose, onSuccess }) {
+    const [titulo, setTitulo] = useState('');
+    const [endereco, setEndereco] = useState('');
+    const [bairro, setBairro] = useState('');
+    const [numero, setNumero] = useState('');
+    const [cep, setCep] = useState('');
+    const [metragem, setMetragem] = useState('');
+    const [proprietario, setProprietario] = useState('');
+    const [observacoes, setObservacoes] = useState('');
+    const [fotoCapa, setFotoCapa] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!titulo || !endereco) return alert("Preencha os campos obrigatórios.");
+        
+        setIsLoading(true);
+        const formData = new FormData();
+        formData.append('titulo', titulo);
+        formData.append('endereco', endereco);
+        formData.append('bairro', bairro);
+        formData.append('numero', numero);
+        formData.append('cep', cep);
+        formData.append('metragem', metragem);
+        formData.append('proprietario', proprietario);
+        formData.append('observacoes', observacoes);
+        if (fotoCapa) formData.append('foto_capa', fotoCapa);
+
+        try {
+            await api.post('/marketplace/', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            onSuccess();
+        } catch (err) {
+            alert("Erro ao cadastrar imóvel.");
+            console.error(err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <div className="p-6 border-b flex justify-between items-center">
+                    <h3 className="text-xl font-bold text-gray-900">Cadastrar Novo Imóvel</h3>
+                    <button onClick={onClose}><X className="w-6 h-6 text-gray-500 hover:text-gray-700" /></button>
+                </div>
+                
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Título do Anúncio *</label>
+                        <input required type="text" className="w-full border rounded-md p-2" value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Casa moderna no centro" />
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Endereço (Rua) *</label>
+                            <input required type="text" className="w-full border rounded-md p-2" value={endereco} onChange={e => setEndereco(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
+                            <input type="text" className="w-full border rounded-md p-2" value={bairro} onChange={e => setBairro(e.target.value)} />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Número</label>
+                            <input type="text" className="w-full border rounded-md p-2" value={numero} onChange={e => setNumero(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">CEP</label>
+                            <input type="text" className="w-full border rounded-md p-2" value={cep} onChange={e => setCep(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Metragem</label>
+                            <input type="text" className="w-full border rounded-md p-2" value={metragem} onChange={e => setMetragem(e.target.value)} placeholder="Ex: 120m²" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Proprietário</label>
+                        <input type="text" className="w-full border rounded-md p-2" value={proprietario} onChange={e => setProprietario(e.target.value)} />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                        <textarea rows="3" className="w-full border rounded-md p-2" value={observacoes} onChange={e => setObservacoes(e.target.value)}></textarea>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Foto de Capa</label>
+                        <input type="file" accept="image/*" className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" onChange={e => setFotoCapa(e.target.files[0])} />
+                    </div>
+
+                    <div className="flex justify-end pt-4 gap-3">
+                        <button type="button" onClick={onClose} className="px-4 py-2 border rounded-md hover:bg-gray-50">Cancelar</button>
+                        <button type="submit" disabled={isLoading} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
+                            {isLoading ? 'Salvando...' : 'Cadastrar Imóvel'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+// --- MODAL EDITAR IMÓVEL (NOVO) ---
+function EditarImovelModal({ imovel, onClose, onSuccess }) {
+    const [titulo, setTitulo] = useState(imovel.titulo || '');
+    const [endereco, setEndereco] = useState(imovel.endereco || '');
+    const [bairro, setBairro] = useState(imovel.bairro || '');
+    const [numero, setNumero] = useState(imovel.numero || '');
+    const [cep, setCep] = useState(imovel.cep || '');
+    const [metragem, setMetragem] = useState(imovel.metragem || '');
+    const [proprietario, setProprietario] = useState(imovel.proprietario || '');
+    const [observacoes, setObservacoes] = useState(imovel.observacoes || '');
+    const [status, setStatus] = useState(imovel.status || 'À venda');
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!titulo || !endereco) return alert("Preencha os campos obrigatórios.");
+        
+        setIsLoading(true);
+        
+        // Para edição, enviamos JSON, pois não estamos alterando a foto de capa aqui
+        const payload = {
+            titulo, endereco, bairro, numero, cep, metragem, proprietario, observacoes, status
+        };
+
+        try {
+            const res = await api.put(`/marketplace/${imovel.id}/`, payload);
+            onSuccess(res.data); // Passa o imóvel atualizado de volta
+        } catch (err) {
+            alert("Erro ao atualizar imóvel.");
+            console.error(err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <div className="p-6 border-b flex justify-between items-center">
+                    <h3 className="text-xl font-bold text-gray-900">Editar Imóvel</h3>
+                    <button onClick={onClose}><X className="w-6 h-6 text-gray-500 hover:text-gray-700" /></button>
+                </div>
+                
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Título do Anúncio *</label>
+                        <input required type="text" className="w-full border rounded-md p-2" value={titulo} onChange={e => setTitulo(e.target.value)} />
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Endereço (Rua) *</label>
+                            <input required type="text" className="w-full border rounded-md p-2" value={endereco} onChange={e => setEndereco(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
+                            <input type="text" className="w-full border rounded-md p-2" value={bairro} onChange={e => setBairro(e.target.value)} />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Número</label>
+                            <input type="text" className="w-full border rounded-md p-2" value={numero} onChange={e => setNumero(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">CEP</label>
+                            <input type="text" className="w-full border rounded-md p-2" value={cep} onChange={e => setCep(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Metragem</label>
+                            <input type="text" className="w-full border rounded-md p-2" value={metragem} onChange={e => setMetragem(e.target.value)} />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Proprietário</label>
+                            <input type="text" className="w-full border rounded-md p-2" value={proprietario} onChange={e => setProprietario(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                            <select className="w-full border rounded-md p-2" value={status} onChange={e => setStatus(e.target.value)}>
+                                <option>À venda</option>
+                                <option>Em negociação</option>
+                                <option>Vendida</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                        <textarea rows="3" className="w-full border rounded-md p-2" value={observacoes} onChange={e => setObservacoes(e.target.value)}></textarea>
+                    </div>
+
+                    <div className="flex justify-end pt-4 gap-3">
+                        <button type="button" onClick={onClose} className="px-4 py-2 border rounded-md hover:bg-gray-50">Cancelar</button>
+                        <button type="submit" disabled={isLoading} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
+                            {isLoading ? 'Salvando...' : 'Salvar Alterações'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
 // --- DETALHES DO IMÓVEL ---
 function ImovelDetailPage({ imovel, onBack, canManage }) {
   const [galeria, setGaleria] = useState(imovel.fotos || []);
