@@ -32,6 +32,8 @@ import {
   Image        // Marketplace
 } from 'lucide-react';
 
+//
+
 // --- IMPORTS DO CHART.JS (ATUALIZADO PARA GRÁFICO DE LINHA) ---
 import { Line } from 'react-chartjs-2'; 
 import {
