@@ -45,8 +45,6 @@ import {
   Legend,
 } from 'chart.js';
 
-//
-
 // --- IMPORTS DO LIGHTBOX (NOVOS) ---
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
