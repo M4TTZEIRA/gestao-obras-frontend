@@ -28,24 +28,26 @@ import {
   Clock,
   Search,
   Settings,
-  ShoppingBag, // <-- NOVO (Marketplace)
-  Image        // <-- NOVO (Marketplace)
+  ShoppingBag, // Marketplace
+  Image        // Marketplace
 } from 'lucide-react';
 
-// ... (o resto dos seus imports e o registro do Chart.js continuam aqui)
 // --- IMPORTS DO CHART.JS (ATUALIZADO PARA GRÁFICO DE LINHA) ---
-import { Line } from 'react-chartjs-2'; // <-- MUDOU DE Bar PARA Line
+import { Line } from 'react-chartjs-2'; 
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
-  PointElement, // <-- ADICIONADO
-  LineElement,  // <-- ADICIONADO
+  PointElement, 
+  LineElement,  
   Title,
   Tooltip,
   Legend,
 } from 'chart.js';
-// BarElement FOI REMOVIDO
+
+// --- IMPORTS DO LIGHTBOX (NOVOS) ---
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 
 // --- REGISTRO DO CHART.JS (ATUALIZADO) ---
 ChartJS.register(
@@ -2044,12 +2046,17 @@ function GlobalMarketplacePage({ user, onLogout, onOpenProfile }) {
   );
 }
 
-// --- DETALHES DO IMÓVEL (ATUALIZADO COM BOTÃO EDITAR E MULTI-UPLOAD) ---
+// --- DETALHES DO IMÓVEL (ATUALIZADO COM LIGHTBOX E REMOÇÃO DE FOTOS) ---
 function ImovelDetailPage({ imovel, onBack, canManage, onEdit }) {
   const [galeria, setGaleria] = useState(imovel.fotos || []);
   const [status, setStatus] = useState(imovel.status);
   const [uploading, setUploading] = useState(false);
   
+  // --- NOVOS ESTADOS PARA O LIGHTBOX ---
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  // ------------------------------------
+
   // Atualiza a galeria e status se o imóvel mudar (ex: após edição do modal)
   useEffect(() => {
       if (imovel.fotos) setGaleria(imovel.fotos);
@@ -2076,7 +2083,6 @@ function ImovelDetailPage({ imovel, onBack, canManage, onEdit }) {
             uploadedCount++;
         } catch (err) { 
             console.error(`Erro ao enviar foto ${file.name}:`, err);
-            // Poderíamos adicionar um aviso ao usuário aqui
         }
     }
     
@@ -2085,13 +2091,10 @@ function ImovelDetailPage({ imovel, onBack, canManage, onEdit }) {
     }
     if (uploadedCount < files.length) {
         alert(`Concluído. ${uploadedCount} de ${files.length} fotos enviadas com sucesso. Algumas falharam.`);
-    } else {
-        alert(`Todas as ${uploadedCount} fotos foram enviadas com sucesso!`);
     }
     setUploading(false);
-    e.target.value = null; // Limpa o input para permitir upload da mesma foto novamente
+    e.target.value = null; 
   };
-  // ---------------------------------
 
   const handleUpdateStatus = async (newStatus) => {
       try {
@@ -2111,119 +2114,178 @@ function ImovelDetailPage({ imovel, onBack, canManage, onEdit }) {
           alert("Erro ao remover imóvel.");
       }
   };
+  
+  // --- NOVO: Handler para Remover Foto Individual ---
+  const handleRemoveFoto = async (fotoId, e) => {
+      e.stopPropagation(); // Impede que o clique abra o lightbox
+      if(!window.confirm("Tem certeza que deseja remover esta foto da galeria?")) return;
+      
+      try {
+          await api.delete(`/marketplace/fotos/${fotoId}/`);
+          // Remove a foto do estado local
+          setGaleria(prev => prev.filter(foto => foto.id !== fotoId));
+      } catch (err) {
+          alert("Erro ao remover a foto.");
+          console.error(err);
+      }
+  };
+  
+  // --- NOVO: Handler para Abrir o Lightbox ---
+  const handleImageClick = (index) => {
+      setCurrentImageIndex(index);
+      setIsLightboxOpen(true);
+  };
+  
+  // Formata as imagens para o Lightbox
+  const lightboxSlides = galeria.map(foto => ({
+      src: `${API_BASE_URL}${foto.url}`
+  }));
+  // Adiciona a foto de capa como o primeiro slide
+  if (imovel.foto_capa_url) {
+      lightboxSlides.unshift({ src: `${API_BASE_URL}${imovel.foto_capa_url}` });
+  }
 
   return (
-    <div className="p-6 md:p-10">
-      <div className="flex justify-between items-center mb-4">
-          <button onClick={onBack} className="flex items-center text-gray-600 hover:text-blue-600 font-medium">
-            <ArrowLeft className="w-5 h-5 mr-1" /> Voltar para a lista
-          </button>
-          {canManage && (
-              <div className="flex space-x-2">
-                  <button onClick={() => onEdit(imovel)} className="text-blue-600 hover:text-blue-800 text-sm flex items-center px-3 py-1 border border-blue-200 rounded-md hover:bg-blue-50">
-                      <Edit className="w-4 h-4 mr-1"/> Editar Dados
-                  </button>
-                  <button onClick={handleRemoveImovel} className="text-red-600 hover:text-red-800 text-sm flex items-center px-3 py-1 border border-red-200 rounded-md hover:bg-red-50">
-                      <Trash2 className="w-4 h-4 mr-1"/> Remover Imóvel
-                  </button>
+    <> {/* Fragmento <> </> necessário para o Lightbox */}
+      <div className="p-6 md:p-10">
+        <div className="flex justify-between items-center mb-4">
+            <button onClick={onBack} className="flex items-center text-gray-600 hover:text-blue-600 font-medium">
+              <ArrowLeft className="w-5 h-5 mr-1" /> Voltar para a lista
+            </button>
+            {canManage && (
+                <div className="flex space-x-2">
+                    <button onClick={() => onEdit(imovel)} className="text-blue-600 hover:text-blue-800 text-sm flex items-center px-3 py-1 border border-blue-200 rounded-md hover:bg-blue-50">
+                        <Edit className="w-4 h-4 mr-1"/> Editar Dados
+                    </button>
+                    <button onClick={handleRemoveImovel} className="text-red-600 hover:text-red-800 text-sm flex items-center px-3 py-1 border border-red-200 rounded-md hover:bg-red-50">
+                        <Trash2 className="w-4 h-4 mr-1"/> Remover Imóvel
+                    </button>
+                </div>
+            )}
+        </div>
+
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
+          <div className="relative h-64 md:h-96 bg-gray-200 group">
+             {imovel.foto_capa_url ? (
+                  <img 
+                    src={`${API_BASE_URL}${imovel.foto_capa_url}`} 
+                    className="w-full h-full object-cover cursor-pointer" 
+                    alt="Capa" 
+                    onClick={() => handleImageClick(0)} // Abre no slide 0
+                  />
+             ) : <div className="flex items-center justify-center h-full text-gray-400">Sem capa</div>}
+             
+             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 pt-24">
+                 <h1 className="text-3xl md:text-4xl font-bold text-white mb-1">{imovel.titulo}</h1>
+                 <p className="text-white/90 text-lg flex items-center"><Building className="w-5 h-5 mr-2"/> {imovel.endereco_completo}</p>
+             </div>
+          </div>
+
+          <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="md:col-span-2 space-y-8">
+                  <div>
+                      <div className="flex justify-between items-center mb-4">
+                          <h3 className="text-xl font-semibold text-gray-800">Galeria de Fotos</h3>
+                          {canManage && (
+                              <label className={`cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded-md text-sm font-medium inline-flex items-center transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                  <Upload className="w-4 h-4 mr-2"/> 
+                                  {uploading ? 'Enviando...' : 'Adicionar Fotos'}
+                                  <input type="file" className="hidden" onChange={handleUploadFotos} accept="image/*" multiple disabled={uploading}/>
+                              </label>
+                          )}
+                      </div>
+                      
+                      {galeria.length > 0 ? (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                              {galeria.map((foto, index) => (
+                                  <div 
+                                    key={foto.id} 
+                                    className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden border cursor-pointer hover:opacity-90 transition-opacity group" 
+                                    onClick={() => handleImageClick(index + 1)} // +1 porque a capa é o index 0
+                                  >
+                                      <img src={`${API_BASE_URL}${foto.url}`} className="w-full h-full object-cover" alt="Galeria" />
+                                      {/* --- NOVO: Botão de Remover Foto --- */}
+                                      {canManage && (
+                                          <button
+                                              onClick={(e) => handleRemoveFoto(foto.id, e)}
+                                              className="absolute top-1 right-1 z-10 p-1.5 bg-red-600/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                                              title="Remover Foto"
+                                          >
+                                              <X className="w-3 h-3"/>
+                                          </button>
+                                      )}
+                                  </div>
+                              ))}
+                          </div>
+                      ) : (
+                          <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-gray-500">
+                              Nenhuma foto adicional na galeria.
+                          </div>
+                      )}
+                  </div>
+
+                  <div>
+                      <h3 className="text-xl font-semibold text-gray-800 mb-3">Observações</h3>
+                      <div className="bg-gray-50 p-5 rounded-lg border text-gray-700 whitespace-pre-wrap leading-relaxed">
+                          {imovel.observacoes || "Sem observações registradas para este imóvel."}
+                      </div>
+                  </div>
               </div>
-          )}
-      </div>
 
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
-        <div className="relative h-64 md:h-96 bg-gray-200 group">
-           {imovel.foto_capa_url ? (
-                <img src={`${API_BASE_URL}${imovel.foto_capa_url}`} className="w-full h-full object-cover" alt="Capa" />
-           ) : <div className="flex items-center justify-center h-full text-gray-400">Sem capa</div>}
-           
-           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6 pt-24">
-               <h1 className="text-3xl md:text-4xl font-bold text-white mb-1">{imovel.titulo}</h1>
-               <p className="text-white/90 text-lg flex items-center"><Building className="w-5 h-5 mr-2"/> {imovel.endereco_completo}</p>
-           </div>
-        </div>
-
-        <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="md:col-span-2 space-y-8">
-                <div>
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-xl font-semibold text-gray-800">Galeria de Fotos</h3>
-                        {canManage && (
-                            <label className={`cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded-md text-sm font-medium inline-flex items-center transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                <Upload className="w-4 h-4 mr-2"/> 
-                                {uploading ? 'Enviando...' : 'Adicionar Fotos'} {/* Alterado para "Fotos" */}
-                                <input type="file" className="hidden" onChange={handleUploadFotos} accept="image/*" multiple disabled={uploading}/> {/* ADICIONADO MULTIPLE */}
-                            </label>
-                        )}
-                    </div>
-                    
-                    {galeria.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            {galeria.map(foto => (
-                                <div key={foto.id} className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden border cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(`${API_BASE_URL}${foto.url}`, '_blank')}>
-                                    <img src={`${API_BASE_URL}${foto.url}`} className="w-full h-full object-cover" alt="Galeria" />
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-gray-500">
-                            Nenhuma foto adicional na galeria.
-                        </div>
-                    )}
-                </div>
-
-                <div>
-                    <h3 className="text-xl font-semibold text-gray-800 mb-3">Observações</h3>
-                    <div className="bg-gray-50 p-5 rounded-lg border text-gray-700 whitespace-pre-wrap leading-relaxed">
-                        {imovel.observacoes || "Sem observações registradas para este imóvel."}
-                    </div>
-                </div>
-            </div>
-
-            <div className="space-y-6">
-                <div className="bg-white p-5 rounded-lg border shadow-sm">
-                    <h4 className="font-bold text-gray-900 mb-4 text-lg border-b pb-2">Detalhes do Imóvel</h4>
-                    <div className="space-y-4 text-sm">
-                        <div>
-                            <span className="block text-gray-500 mb-1">Status Atual</span>
-                            {canManage ? (
-                                <select 
-                                    value={status} 
-                                    onChange={(e) => handleUpdateStatus(e.target.value)} 
-                                    className="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 py-2"
-                                >
-                                    <option>À venda</option>
-                                    <option>Em negociação</option>
-                                    <option>Vendida</option>
-                                </select>
-                            ) : (
-                                <span className={`inline-flex px-3 py-1 rounded-full text-sm font-semibold ${
-                                    status === 'Vendida' ? 'bg-red-100 text-red-800' : 
-                                    status === 'Em negociação' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
-                                }`}>{status}</span>
-                            )}
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <span className="block text-gray-500 mb-1">Metragem</span>
-                                <span className="font-semibold text-gray-900">{imovel.metragem || '-'}</span>
-                            </div>
-                            <div>
-                                <span className="block text-gray-500 mb-1">CEP</span>
-                                <span className="font-semibold text-gray-900">{imovel.cep || '-'}</span>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <span className="block text-gray-500 mb-1">Proprietário</span>
-                            <span className="font-semibold text-gray-900">{imovel.proprietario || '-'}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+              <div className="space-y-6">
+                  <div className="bg-white p-5 rounded-lg border shadow-sm">
+                      <h4 className="font-bold text-gray-900 mb-4 text-lg border-b pb-2">Detalhes do Imóvel</h4>
+                      <div className="space-y-4 text-sm">
+                          <div>
+                              <span className="block text-gray-500 mb-1">Status Atual</span>
+                              {canManage ? (
+                                  <select 
+                                      value={status} 
+                                      onChange={(e) => handleUpdateStatus(e.target.value)} 
+                                      className="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 py-2"
+                                  >
+                                      <option>À venda</option>
+                                      <option>Em negociação</option>
+                                      <option>Vendida</option>
+                                  </select>
+                              ) : (
+                                  <span className={`inline-flex px-3 py-1 rounded-full text-sm font-semibold ${
+                                      status === 'Vendida' ? 'bg-red-100 text-red-800' : 
+                                      status === 'Em negociação' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                                  }`}>{status}</span>
+                              )}
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                  <span className="block text-gray-500 mb-1">Metragem</span>
+                                  <span className="font-semibold text-gray-900">{imovel.metragem || '-'}</span>
+                              </div>
+                              <div>
+                                  <span className="block text-gray-500 mb-1">CEP</span>
+                                  <span className="font-semibold text-gray-900">{imovel.cep || '-'}</span>
+                              </div>
+                          </div>
+                          
+                          <div>
+                              <span className="block text-gray-500 mb-1">Proprietário</span>
+                              <span className="font-semibold text-gray-900">{imovel.proprietario || '-'}</span>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* --- NOVO: Componente Lightbox --- */}
+      <Lightbox
+          open={isLightboxOpen}
+          close={() => setIsLightboxOpen(false)}
+          slides={lightboxSlides}
+          index={currentImageIndex}
+      />
+    </>
   );
 }
 
