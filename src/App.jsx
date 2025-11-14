@@ -2300,6 +2300,8 @@ function EditarImovelModal({ imovel, onClose, onSuccess }) {
     );
 }
 
+//
+
 // --- MODAL NOVO IMÓVEL ---
 function NovoImovelModal({ onClose, onSuccess }) {
     const [titulo, setTitulo] = useState('');
