@@ -1869,15 +1869,15 @@ function InventarioTable({ items, isLoading, canManage, showObraName = false }) 
 
 // --- PÁGINA GLOBAL MARKETPLACE (ATUALIZADA COM HEADER) ---
 // --- PÁGINA GLOBAL MARKETPLACE (ATUALIZADA COM EDIÇÃO) ---
-function GlobalMarketplacePage({ user }) {
+function GlobalMarketplacePage({ user, onLogout, onOpenProfile }) {
   const [imoveis, setImoveis] = useState([]);
   const [viewMode, setViewMode] = useState('list'); // 'list' ou 'detail'
   const [selectedImovel, setSelectedImovel] = useState(null);
   
   // Estados dos Modais
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false); // <-- NOVO
-  const [editingImovel, setEditingImovel] = useState(null);      // <-- NOVO
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingImovel, setEditingImovel] = useState(null);
   
   const [refresh, setRefresh] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -1903,9 +1903,8 @@ function GlobalMarketplacePage({ user }) {
     setRefresh(prev => prev + 1);
   };
 
-  // --- HANDLERS DE EDIÇÃO ---
   const handleEditClick = (imovel, e) => {
-      if (e) e.stopPropagation(); // Evita abrir os detalhes ao clicar no editar
+      if (e) e.stopPropagation(); 
       setEditingImovel(imovel);
       setIsEditModalOpen(true);
   };
@@ -1914,146 +1913,185 @@ function GlobalMarketplacePage({ user }) {
       setIsEditModalOpen(false);
       setEditingImovel(null);
       
-      // Se estivermos vendo os detalhes, atualizamos o imóvel selecionado
       if (selectedImovel && selectedImovel.id === imovelAtualizado.id) {
-          // Mantém as fotos antigas no estado local para não piscar, 
-          // pois o PUT não retorna as fotos populadas da mesma forma que o GET detail
           setSelectedImovel(prev => ({ ...prev, ...imovelAtualizado }));
       }
       setRefresh(prev => prev + 1);
   };
-  // --------------------------
 
   if (viewMode === 'detail' && selectedImovel) {
     return (
-        <ImovelDetailPage 
-            imovel={selectedImovel} 
-            onBack={handleBackToList} 
-            canManage={canManage} 
-            onEdit={(imovel) => handleEditClick(imovel)} // Passa a função para a página de detalhes
-        />
+        <>
+            {/* O Header fica aqui */}
+            <Header 
+                user={user} 
+                onLogoutClick={onLogout} 
+                pageTitle="Detalhes do Imóvel" 
+                showBackButton={true}
+                onBackClick={handleBackToList}
+                onOpenProfile={onOpenProfile}
+            />
+            {/* Agora passamos a função onEdit diretamente para o ImovelDetailPage */}
+            <ImovelDetailPage 
+                imovel={selectedImovel} 
+                onBack={handleBackToList} 
+                canManage={canManage} 
+                onEdit={() => handleEditClick(selectedImovel)} // <-- ESTA É A MUDANÇA
+            />
+             {/* Modal de Editar (NOVO) - Continua aqui, mas com o imovel correto */}
+            {isEditModalOpen && editingImovel && (
+                <EditarImovelModal 
+                    imovel={editingImovel}
+                    onClose={() => setIsEditModalOpen(false)} 
+                    onSuccess={handleEditSuccess} 
+                />
+            )}
+        </>
     );
   }
 
   return (
-    <div className="p-6 md:p-10">
-      <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-        <h2 className="text-2xl font-bold text-gray-800">Marketplace de Imóveis</h2>
-        {canManage && (
-          <button 
-            onClick={() => setIsAddModalOpen(true)} 
-            className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-          >
-            <Plus className="w-5 h-5 mr-2" /> Novo Imóvel
-          </button>
+    <>
+      <Header 
+        user={user} 
+        onLogoutClick={onLogout} 
+        pageTitle="Marketplace" 
+        onOpenProfile={onOpenProfile} 
+      />
+      
+      <div className="p-6 md:p-10">
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+          <h2 className="text-xl font-semibold text-gray-700">Imóveis Disponíveis</h2>
+          {canManage && (
+            <button 
+              onClick={() => setIsAddModalOpen(true)} 
+              className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+            >
+              <Plus className="w-5 h-5 mr-2" /> Novo Imóvel
+            </button>
+          )}
+        </div>
+
+        {isLoading ? (
+            <div className="text-center text-gray-500 py-10">A carregar imóveis...</div>
+        ) : imoveis.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {imoveis.map(imovel => (
+                <div 
+                  key={imovel.id} 
+                  onClick={() => handleOpenDetail(imovel)} 
+                  className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group border border-gray-100 relative"
+                >
+                  {canManage && (
+                      <button 
+                          onClick={(e) => handleEditClick(imovel, e)}
+                          className="absolute top-2 left-2 z-10 p-2 bg-white/90 rounded-full text-blue-600 hover:text-blue-800 shadow-sm hover:bg-white transition-all"
+                          title="Editar Imóvel"
+                      >
+                          <Edit className="w-4 h-4" />
+                      </button>
+                  )}
+
+                  <div className="h-48 bg-gray-200 relative">
+                    {imovel.foto_capa_url ? (
+                      <img src={`${API_BASE_URL}${imovel.foto_capa_url}`} alt={imovel.titulo} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-gray-400 bg-gray-100">
+                          <Image className="w-12 h-12 opacity-50" />
+                      </div>
+                    )}
+                    <div className={`absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded shadow-sm ${
+                      imovel.status === 'Vendida' ? 'bg-red-500 text-white' : 
+                      imovel.status === 'Em negociação' ? 'bg-yellow-400 text-black' : 'bg-green-500 text-white'
+                    }`}>
+                      {imovel.status}
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-bold text-lg text-gray-800 mb-1 group-hover:text-blue-600 truncate">{imovel.titulo}</h3>
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-2 h-10">{imovel.endereco_completo}</p>
+                    <div className="flex justify-between items-center text-sm text-gray-500 border-t pt-3">
+                      <span className="font-medium text-gray-700">{imovel.metragem || 'N/D'}</span>
+                      <span>{imovel.proprietario || 'N/D'}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+        ) : (
+            <div className="text-center text-gray-500 py-10 bg-white rounded-lg border border-dashed border-gray-300">
+                Nenhum imóvel cadastrado no momento.
+            </div>
+        )}
+
+        {isAddModalOpen && (
+          <NovoImovelModal 
+              onClose={() => setIsAddModalOpen(false)} 
+              onSuccess={() => { setIsAddModalOpen(false); setRefresh(r => r + 1); }} 
+          />
+        )}
+
+        {/* O modal de edição precisa ser renderizado aqui para que os valores não "resetem" ao sair da página de detalhes */}
+        {isEditModalOpen && editingImovel && (
+            <EditarImovelModal 
+                imovel={editingImovel}
+                onClose={() => setIsEditModalOpen(false)} 
+                onSuccess={handleEditSuccess} 
+            />
         )}
       </div>
-
-      {isLoading ? (
-          <div className="text-center text-gray-500 py-10">A carregar imóveis...</div>
-      ) : imoveis.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {imoveis.map(imovel => (
-              <div 
-                key={imovel.id} 
-                onClick={() => handleOpenDetail(imovel)} 
-                className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group border border-gray-100 relative"
-              >
-                {/* Botão de Editar no Card (Apenas Gestor/Admin) */}
-                {canManage && (
-                    <button 
-                        onClick={(e) => handleEditClick(imovel, e)}
-                        className="absolute top-2 left-2 z-10 p-2 bg-white/90 rounded-full text-blue-600 hover:text-blue-800 shadow-sm hover:bg-white transition-all"
-                        title="Editar Imóvel"
-                    >
-                        <Edit className="w-4 h-4" />
-                    </button>
-                )}
-
-                <div className="h-48 bg-gray-200 relative">
-                  {imovel.foto_capa_url ? (
-                    <img src={`${API_BASE_URL}${imovel.foto_capa_url}`} alt={imovel.titulo} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-gray-400 bg-gray-100">
-                        <Image className="w-12 h-12 opacity-50" />
-                    </div>
-                  )}
-                  <div className={`absolute top-2 right-2 px-2 py-1 text-xs font-bold rounded shadow-sm ${
-                    imovel.status === 'Vendida' ? 'bg-red-500 text-white' : 
-                    imovel.status === 'Em negociação' ? 'bg-yellow-400 text-black' : 'bg-green-500 text-white'
-                  }`}>
-                    {imovel.status}
-                  </div>
-                </div>
-                <div className="p-4">
-                  <h3 className="font-bold text-lg text-gray-800 mb-1 group-hover:text-blue-600 truncate">{imovel.titulo}</h3>
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2 h-10">{imovel.endereco_completo}</p>
-                  <div className="flex justify-between items-center text-sm text-gray-500 border-t pt-3">
-                    <span className="font-medium text-gray-700">{imovel.metragem || 'N/D'}</span>
-                    <span>{imovel.proprietario || 'N/D'}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-      ) : (
-          <div className="text-center text-gray-500 py-10 bg-white rounded-lg border border-dashed border-gray-300">
-              Nenhum imóvel cadastrado no momento.
-          </div>
-      )}
-
-      {/* Modal de Adicionar */}
-      {isAddModalOpen && (
-        <NovoImovelModal 
-            onClose={() => setIsAddModalOpen(false)} 
-            onSuccess={() => { setIsAddModalOpen(false); setRefresh(r => r + 1); }} 
-        />
-      )}
-
-      {/* Modal de Editar (NOVO) */}
-      {isEditModalOpen && editingImovel && (
-        <EditarImovelModal 
-            imovel={editingImovel}
-            onClose={() => setIsEditModalOpen(false)} 
-            onSuccess={handleEditSuccess} 
-        />
-      )}
-    </div>
+    </>
   );
 }
 
-// --- DETALHES DO IMÓVEL (ATUALIZADO COM BOTÃO EDITAR) ---
+// --- DETALHES DO IMÓVEL (ATUALIZADO COM BOTÃO EDITAR E MULTI-UPLOAD) ---
 function ImovelDetailPage({ imovel, onBack, canManage, onEdit }) {
   const [galeria, setGaleria] = useState(imovel.fotos || []);
   const [status, setStatus] = useState(imovel.status);
   const [uploading, setUploading] = useState(false);
   
-  // Atualiza a galeria se o imóvel mudar (ex: após edição)
+  // Atualiza a galeria e status se o imóvel mudar (ex: após edição do modal)
   useEffect(() => {
       if (imovel.fotos) setGaleria(imovel.fotos);
       setStatus(imovel.status);
   }, [imovel]);
 
-  const handleUploadFoto = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  // --- Múltiplos uploads de fotos ---
+  const handleUploadFotos = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
     
     setUploading(true);
-    const formData = new FormData();
-    formData.append('foto', file);
-    
-    try {
-      const res = await api.post(`/marketplace/${imovel.id}/fotos/`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      setGaleria([...galeria, res.data]);
-    } catch (err) { 
-        alert("Erro ao enviar foto.");
-        console.error(err);
-    } finally {
-        setUploading(false);
+    let uploadedCount = 0;
+    const newPhotos = [];
+
+    for (const file of files) {
+        const formData = new FormData();
+        formData.append('foto', file);
+        try {
+            const res = await api.post(`/marketplace/${imovel.id}/fotos/`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            newPhotos.push(res.data);
+            uploadedCount++;
+        } catch (err) { 
+            console.error(`Erro ao enviar foto ${file.name}:`, err);
+            // Poderíamos adicionar um aviso ao usuário aqui
+        }
     }
+    
+    if (uploadedCount > 0) {
+        setGaleria(prev => [...prev, ...newPhotos]);
+    }
+    if (uploadedCount < files.length) {
+        alert(`Concluído. ${uploadedCount} de ${files.length} fotos enviadas com sucesso. Algumas falharam.`);
+    } else {
+        alert(`Todas as ${uploadedCount} fotos foram enviadas com sucesso!`);
+    }
+    setUploading(false);
+    e.target.value = null; // Limpa o input para permitir upload da mesma foto novamente
   };
+  // ---------------------------------
 
   const handleUpdateStatus = async (newStatus) => {
       try {
@@ -2082,7 +2120,6 @@ function ImovelDetailPage({ imovel, onBack, canManage, onEdit }) {
           </button>
           {canManage && (
               <div className="flex space-x-2">
-                  {/* Botão Editar na Página de Detalhes */}
                   <button onClick={() => onEdit(imovel)} className="text-blue-600 hover:text-blue-800 text-sm flex items-center px-3 py-1 border border-blue-200 rounded-md hover:bg-blue-50">
                       <Edit className="w-4 h-4 mr-1"/> Editar Dados
                   </button>
@@ -2113,8 +2150,8 @@ function ImovelDetailPage({ imovel, onBack, canManage, onEdit }) {
                         {canManage && (
                             <label className={`cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded-md text-sm font-medium inline-flex items-center transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                 <Upload className="w-4 h-4 mr-2"/> 
-                                {uploading ? 'Enviando...' : 'Adicionar Foto'}
-                                <input type="file" className="hidden" onChange={handleUploadFoto} accept="image/*" disabled={uploading}/>
+                                {uploading ? 'Enviando...' : 'Adicionar Fotos'} {/* Alterado para "Fotos" */}
+                                <input type="file" className="hidden" onChange={handleUploadFotos} accept="image/*" multiple disabled={uploading}/> {/* ADICIONADO MULTIPLE */}
                             </label>
                         )}
                     </div>
